@@ -215,7 +215,14 @@ Ollama native: `GET /api/tags`, `GET /api/ps`, `POST /api/chat`, `POST /api/gene
 `temperature`, `top_p`, `num_predict`, `stop`, `seed`, penalties are mapped).
 An empty `messages`/`prompt` just loads the model. Extra: `POST /api/stop`.
 
-OpenAI compatible: `POST /v1/chat/completions`, `POST /v1/completions`, `GET /v1/models`.
+Model management (full Ollama API coverage): `GET /api/version`, `POST /api/show`,
+`POST /api/copy` (an alias, no data duplicated), `DELETE /api/delete` (409 while the model is
+loaded; removes the files only if ColiOllama downloaded them and no alias uses them),
+`POST /api/pull` (streams `{"status": ...}` lines, runs the readiness check/conversion).
+Answered with HTTP 501 because Colibrí cannot back them: `POST /api/create`, `/api/push`,
+`/api/embed`, `/api/embeddings`, `POST /api/blobs/:digest` (and `HEAD` always 404), `POST /v1/embeddings`.
+
+OpenAI compatible: `POST /v1/chat/completions`, `POST /v1/completions`, `GET /v1/models`, `GET /v1/models/{id}`.
 
 ```bash
 curl http://localhost:11434/api/tags

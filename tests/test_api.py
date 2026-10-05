@@ -104,3 +104,42 @@ def test_ps_rejects_foreign_server(monkeypatch):
     monkeypatch.setattr(httpx, "get", lambda *a, **k: httpx.Response(200, json={"models": []}))
     result = CliRunner().invoke(app, ["ps", "--host", "http://x:1"])
     assert result.exit_code == 1 and "not a ColiOllama server" in result.output
+
+
+def test_version_show_head_root(client):
+    assert client.get("/api/version").json()["version"]
+    assert client.head("/").status_code == 200
+    shown = client.post("/api/show", json={"model": "alpha"}).json()
+    assert shown["details"]["format"] == "colibri" and "FROM" in shown["modelfile"]
+    assert client.post("/api/show", json={"model": "nope"}).status_code == 404
+    assert client.get("/v1/models/alpha").json()["id"] == "alpha"
+    assert client.get("/v1/models/nope").status_code == 404
+
+
+def test_copy_and_delete(client):
+    assert client.post("/api/copy", json={"source": "alpha", "destination": "alias"}).status_code == 200
+    assert "alias" in [m["name"] for m in client.get("/api/tags").json()["models"]]
+    assert client.request("DELETE", "/api/delete", json={"model": "alias"}).status_code == 200
+    assert client.request("DELETE", "/api/delete", json={"model": "alias"}).status_code == 404
+    assert "alpha" in [m["name"] for m in client.get("/api/tags").json()["models"]]
+
+
+def test_delete_refuses_loaded_model(client):
+    client.post("/api/generate", json={"model": "alpha", "prompt": "hi", "stream": False})
+    assert client.request("DELETE", "/api/delete", json={"model": "alpha"}).status_code == 409
+
+
+def test_pull_streams_status_and_reports_errors(client):
+    entry = client.app.state.store.get("alpha")
+    client.app.state.store.add("alpha", entry.path, verified=True)
+    r = client.post("/api/pull", json={"model": "alpha"})
+    assert json.loads(r.text.splitlines()[-1]) == {"status": "success"}
+    r = client.post("/api/pull", json={"model": "not a repo", "stream": False})
+    assert r.status_code == 500 and "error" in r.json()
+
+
+def test_unsupported_endpoints_answer_501(client):
+    for method, path in (("POST", "/api/create"), ("POST", "/api/push"), ("POST", "/api/embed"),
+                         ("POST", "/api/embeddings"), ("POST", "/v1/embeddings")):
+        assert client.request(method, path, json={"model": "alpha"}).status_code == 501
+    assert client.head("/api/blobs/sha256:abc").status_code == 404

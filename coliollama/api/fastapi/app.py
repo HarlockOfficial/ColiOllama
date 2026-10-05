@@ -8,11 +8,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from coliollama import __version__
 from coliollama.api.fastapi.dependencies import ApiError
-from coliollama.api.routes import ollama_compat, openai_compat
+from coliollama.api.routes import ollama_compat, ollama_models, openai_compat
 from coliollama.core.config import Settings
 from coliollama.core.engine.client import EngineClient
 from coliollama.core.engine.lifecycle import EngineLifecycle
@@ -76,10 +76,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             body = {"error": exc.message}
         return JSONResponse(body, status_code=exc.status)
 
-    @app.get("/")
-    async def root() -> str:
-        return "ColiOllama is running"
+    @app.api_route("/", methods=["GET", "HEAD"])
+    async def root() -> PlainTextResponse:
+        return PlainTextResponse("ColiOllama is running")
 
     app.include_router(ollama_compat.router)
+    app.include_router(ollama_models.router)
     app.include_router(openai_compat.router)
     return app
