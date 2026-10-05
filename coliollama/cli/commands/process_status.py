@@ -17,9 +17,20 @@ def ps(host: Annotated[str | None, typer.Option(help=SERVER_OPTION_HELP)] = None
     """Show the running model, engine PID and queue depth."""
     url = server_url(host)
     try:
-        data = httpx.get(f"{url}/api/ps", timeout=5.0).json()
-    except httpx.HTTPError:
+        resp = httpx.get(f"{url}/api/ps", timeout=5.0)
+        data = resp.json()
+    except (httpx.HTTPError, ValueError):
         typer.secho(f"No ColiOllama server reachable at {url}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+    if not isinstance(data, dict) or "queue" not in data:
+        detail = data.get("error") if isinstance(data, dict) else None
+        typer.secho(
+            f"{url} answered /api/ps but is not a ColiOllama server"
+            + (f" ({detail})" if detail else "")
+            + ". Another service (e.g. Ollama) may be using that port; "
+            "start ColiOllama with `coliollama serve --port <port>` and pass `--host`.",
+            fg=typer.colors.RED, err=True,
+        )
         raise typer.Exit(1)
     queue = data["queue"]
     models = data["models"]

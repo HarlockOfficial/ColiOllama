@@ -93,3 +93,14 @@ def test_curl_style_form_content_type_and_bad_json(client):
     assert r.status_code == 400 and "invalid JSON" in r.json()["error"]
     r = client.post("/v1/completions", content="[1]")
     assert r.status_code == 400 and r.json()["error"]["type"] == "invalid_request_error"
+
+
+def test_ps_rejects_foreign_server(monkeypatch):
+    import httpx
+    from typer.testing import CliRunner
+
+    from coliollama.cli.main import app
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: httpx.Response(200, json={"models": []}))
+    result = CliRunner().invoke(app, ["ps", "--host", "http://x:1"])
+    assert result.exit_code == 1 and "not a ColiOllama server" in result.output
