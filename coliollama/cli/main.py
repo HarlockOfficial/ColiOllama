@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typer
 
-from coliollama.cli.commands import list_models, process_status, pull, run, serve, update
+from coliollama.cli.commands import list_models, process_status, pull, run, scan, serve, update
 
 app = typer.Typer(
     name="coliollama",
@@ -18,6 +18,7 @@ app.command("run")(run.run)
 app.command("pull")(pull.pull)
 app.command("list")(list_models.list_models)
 app.command("ps")(process_status.ps)
+app.command("scan")(scan.scan)
 app.command("update")(update.update)
 app.command("stop")(process_status.stop)
 

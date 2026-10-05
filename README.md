@@ -39,6 +39,12 @@ routes translate to the engine's OpenAI gateway and back (NDJSON streaming).
 
 ## 2. Installation
 
+**Fast path (new machine):** `./scripts/bootstrap.sh` creates `.venv`, installs CPU-only torch
+and the package, creates `.env`, downloads the latest Colibrí (building CUDA engines when an
+NVIDIA GPU and `nvcc` exist) and prints the hardware scan. Options: `--dev`, `--hf-token TOKEN`,
+`--no-engine`, `--no-gpu-build`, `--skip-torch`, `--venv DIR`. It is safe to re-run. Copy the
+project to the new machine without `.venv`, `dependencies/` or `.env`.
+
 Prerequisites
 
 - Python ≥ 3.10.
@@ -168,6 +174,7 @@ drain barrier:
 coliollama serve [--host 127.0.0.1] [--port 11434] [--max-concurrency 1]
                  [--log-level info] [--gpu auto|none|0,1]
                  [--auto-update/--no-auto-update] [--detach/-d]
+coliollama scan   [--online] [--all] [--json]
 coliollama update [--check] [--force] [--gpu-build/--no-gpu-build]
 coliollama run   <model> [PROMPT] [--host URL] [--revision REV]
 coliollama pull  <model> [--revision REV]
@@ -181,6 +188,12 @@ coliollama stop  [--host URL]
   none is reachable, and opens an interactive chat (`/clear`, `/bye`, Ctrl-D).
   With `PROMPT` it answers once and exits. With `--host` or `COLIOLLAMA_HOST`
   set it never starts a server itself.
+- `scan` reports CPU threads, RAM, free disk (where models are stored), GPUs/VRAM and the engine
+  build, then rates each known downloadable model: download size, converted size, peak disk
+  (raw download plus converted copy), whether it runs on GPU or CPU, and `fits` (converted model
+  fits in RAM) or `streams` (experts are read from disk, slower). Models that do not fit the disk
+  are hidden unless `--all`. `--online` adds popular Hugging Face repos with a model type Colibrí
+  supports (marked unverified), `--json` is machine-readable. Sizes are estimates.
 - `update` checks the [Colibrí releases](https://github.com/JustVugg/colibri/releases) and, if a
   newer one exists, downloads it, verifies its SHA256 against `SHA256SUMS.txt`, unpacks it to
   `~/.coliollama/engines/versions/<ver>` and makes it the main engine (the previous version is
