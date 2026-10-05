@@ -41,7 +41,7 @@ def test_errors(client):
     r = client.post("/api/chat", json={"model": "nope", "messages": [{"role": "user", "content": "x"}]})
     assert r.status_code == 404 and "not found" in r.json()["error"]
     r = client.post("/v1/chat/completions", json={"model": "nope", "messages": []})
-    assert r.status_code == 404 and r.json()["error"]["type"] == "not_found"
+    assert r.status_code == 404 and r.json()["error"]["type"] == "not_found_error"
     r = client.post("/api/generate", json={"model": "alpha", "prompt": "boom", "stream": True})
     assert r.status_code == 500 and r.json()["error"] == "engine exploded"
     assert client.get("/api/ps").json()["queue"]["queue_depth"] == 0
@@ -107,7 +107,11 @@ def test_ps_rejects_foreign_server(monkeypatch):
 
 
 def test_version_show_head_root(client):
-    assert client.get("/api/version").json()["version"]
+    ver = client.get("/api/version").json()["version"]
+    assert tuple(int(x) for x in ver.split(".")) >= (0, 6, 4)
+    shown_info = client.post("/api/show", json={"model": "alpha"}).json()["model_info"]
+    arch = shown_info["general.architecture"]
+    assert isinstance(shown_info[f"{arch}.context_length"], int)
     assert client.head("/").status_code == 200
     shown = client.post("/api/show", json={"model": "alpha"}).json()
     assert shown["details"]["format"] == "colibri" and "FROM" in shown["modelfile"]
@@ -143,3 +147,12 @@ def test_unsupported_endpoints_answer_501(client):
                          ("POST", "/api/embeddings"), ("POST", "/v1/embeddings")):
         assert client.request(method, path, json={"model": "alpha"}).status_code == 501
     assert client.head("/api/blobs/sha256:abc").status_code == 404
+
+
+def test_ollama_metadata_shapes(client):
+    assert client.head("/api/tags").status_code == 200
+    assert client.get("/api/status").json()["cloud"]
+    model = client.get("/api/tags").json()["models"][0]
+    assert model["capabilities"] and "context_length" in model["details"]
+    shown = client.post("/api/show", json={"model": "alpha"}).json()
+    assert {"license", "tensors", "details", "model_info", "capabilities"} <= set(shown)

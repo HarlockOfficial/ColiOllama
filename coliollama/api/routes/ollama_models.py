@@ -9,10 +9,13 @@ import shutil
 from collections.abc import AsyncIterator
 from pathlib import Path
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from coliollama import __version__
+from coliollama.api.routes.ollama_compat import _details, read_config
 from coliollama.api.fastapi.dependencies import ApiError, get_scheduler, get_store, json_body, lookup_model
 from coliollama.core.scheduler.queue_manager import QueueManager
 from coliollama.registry.huggingface_resolver import HuggingFaceResolver, ModelResolutionError
@@ -28,36 +31,42 @@ def _model_name(body: dict) -> str:
     return name
 
 
+# Ollama clients (VS Code Copilot, Open WebUI, ...) gate features on the server version, so
+# report an Ollama release we are API-compatible with and expose our own version separately.
+OLLAMA_COMPAT_VERSION = "0.12.6"
+
+
 @router.get("/version")
 async def version():
-    return {"version": __version__}
+    return {"version": OLLAMA_COMPAT_VERSION, "coliollama": __version__}
 
 
 @router.post("/show")
 async def show(body: dict = Depends(json_body), store: LocalStore = Depends(get_store)):
     entry = lookup_model(store, _model_name(body))
-    config: dict = {}
-    try:
-        config = json.loads((Path(entry.path) / "config.json").read_text())
-    except (OSError, ValueError):
-        pass
+    config = read_config(entry)
     text = config.get("text_config") or config
-    info = {"general.architecture": config.get("model_type", "unknown")}
+    arch = config.get("model_type", "unknown")
+    info = {"general.architecture": arch}
+    # Ollama keys per-architecture values as "<arch>.<name>"; clients read "<arch>.context_length".
     for src, dst in (
         ("num_hidden_layers", "block_count"), ("hidden_size", "embedding_length"),
         ("num_experts", "expert_count"), ("n_routed_experts", "expert_count"),
-        ("max_position_embeddings", "context_length"), ("vocab_size", "vocab_size"),
+        ("max_position_embeddings", "context_length"),
     ):
         if isinstance(text.get(src), int):
-            info[f"general.{dst}"] = text[src]
+            info[f"{arch}.{dst}"] = text[src]
+    info.setdefault(f"{arch}.context_length", 8192)
     return {
         "modelfile": f"# Colibrí model\nFROM {entry.path}\n",
+        "license": "",
         "parameters": "",
         "template": "",
-        "details": {"format": "colibri", "family": config.get("model_type", "moe"),
-                    "parent_model": entry.repo_id or "", "parameter_size": "", "quantization_level": ""},
+        "tensors": [],
+        "details": _details(entry),
         "model_info": info,
         "capabilities": ["completion"],
+        "modified_at": datetime.fromtimestamp(entry.added_at or 0, timezone.utc).isoformat(),
     }
 
 
@@ -80,7 +89,7 @@ async def delete(
     name = _model_name(body)
     entry = store.get(name)
     if entry is None:
-        raise ApiError(404, f"model '{name}' not found", "not_found")
+        raise ApiError(404, f"model '{name}' not found", "not_found_error")
     if request.app.state.lifecycle.active_model == entry.name:
         raise ApiError(409, f"model '{name}' is loaded; run `coliollama stop` first", "conflict")
     store.remove(entry.name)

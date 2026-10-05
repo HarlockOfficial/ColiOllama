@@ -50,7 +50,7 @@ def lookup_model(store: LocalStore, name: str | None) -> ModelEntry:
         raise ApiError(400, "model is required", "invalid_request_error")
     entry = store.get(name)
     if entry is None or not entry.exists:
-        raise ApiError(404, f"model '{name}' not found; run `coliollama pull {name}`", "not_found")
+        raise ApiError(404, f"model '{name}' not found; run `coliollama pull {name}`", "not_found_error")
     return entry
 
 

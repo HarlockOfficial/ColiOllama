@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from pathlib import Path
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 
@@ -47,8 +48,36 @@ def _digest(entry: ModelEntry) -> str:
     return hashlib.sha256(entry.path.encode()).hexdigest()
 
 
+def read_config(entry: ModelEntry) -> dict:
+    try:
+        config = json.loads((Path(entry.path) / "config.json").read_text())
+    except (OSError, ValueError):
+        return {}
+    return config if isinstance(config, dict) else {}
+
+
+def _int(config: dict, *keys: str) -> int | None:
+    text = config.get("text_config") or config
+    for key in keys:
+        if isinstance(text.get(key), int):
+            return text[key]
+    return None
+
+
+def context_length(entry: ModelEntry) -> int:
+    return _int(read_config(entry), "max_position_embeddings") or 8192
+
+
 def _details(entry: ModelEntry) -> dict:
-    return {"format": "colibri", "family": "moe", "parent_model": entry.repo_id or ""}
+    config = read_config(entry)
+    family = config.get("model_type") or "moe"
+    details = {"parent_model": entry.repo_id or "", "format": "colibri", "family": family,
+               "families": [family], "parameter_size": "unknown", "quantization_level": "unknown",
+               "context_length": context_length(entry)}
+    embedding = _int(config, "hidden_size")
+    if embedding:
+        details["embedding_length"] = embedding
+    return details
 
 
 def _openai_params(body: dict) -> dict:
@@ -66,7 +95,7 @@ def _timing(started: float, count: int, prompt_count: int | None) -> dict:
     return out
 
 
-@router.get("/tags")
+@router.api_route("/tags", methods=["GET", "HEAD"])
 async def tags(store: LocalStore = Depends(get_store)):
     models = []
     for m in store.list():
@@ -79,6 +108,7 @@ async def tags(store: LocalStore = Depends(get_store)):
                 "size": m.size_bytes() if m.exists else 0,
                 "digest": _digest(m),
                 "details": _details(m),
+                "capabilities": ["completion"],
             }
         )
     return {"models": models}
@@ -100,12 +130,18 @@ async def ps(request: Request, scheduler: QueueManager = Depends(get_scheduler),
                 "details": _details(entry) if entry else {},
                 "expires_at": "0001-01-01T00:00:00Z",
                 "size_vram": 0,
+                "context_length": context_length(entry) if entry else 0,
                 "pid": info["pid"],
                 "processor": info["processor"],
                 "started_at": datetime.fromtimestamp(info["started_at"], timezone.utc).isoformat(),
             }
         )
     return {"models": models, "queue": snap}
+
+
+@router.get("/status")
+async def status():
+    return {"cloud": {"disabled": True, "source": "none"}}
 
 
 @router.post("/stop")

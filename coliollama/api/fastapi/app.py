@@ -71,7 +71,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.exception_handler(ApiError)
     async def api_error_handler(request: Request, exc: ApiError) -> JSONResponse:
         if request.url.path.startswith("/v1/"):
-            body = {"error": {"message": exc.message, "type": exc.kind, "code": exc.status}}
+            body = {"error": {"message": exc.message, "type": exc.kind, "param": None, "code": None}}
         else:
             body = {"error": exc.message}
         return JSONResponse(body, status_code=exc.status)

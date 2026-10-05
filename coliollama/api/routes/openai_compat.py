@@ -90,7 +90,7 @@ async def list_models(store: LocalStore = Depends(get_store)):
 async def get_model(model_id: str, store: LocalStore = Depends(get_store)):
     entry = store.get(model_id)
     if entry is None:
-        raise ApiError(404, f"The model '{model_id}' does not exist", "not_found")
+        raise ApiError(404, f"The model '{model_id}' does not exist", "not_found_error")
     return {"id": entry.name, "object": "model", "created": int(entry.added_at or time.time()), "owned_by": "coliollama"}
 
 
