@@ -130,7 +130,7 @@ class HuggingFaceResolver:
         say(f"Model is not directly usable ({problems}); converting with `coli convert` ...")
         out_dir = self.converted_dir_for(repo_id)
         try:
-            self._converter.convert(repo_id, out_dir)
+            self._converter.convert(repo_id, out_dir, source_dir=path)
             report = self._checker.check(out_dir)
         except ReadinessError as exc:
             raise ModelResolutionError(str(exc)) from exc
