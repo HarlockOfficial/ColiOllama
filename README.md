@@ -180,7 +180,7 @@ coliollama run   <model> [PROMPT] [--host URL] [--revision REV]
 coliollama pull  <model> [--revision REV]
 coliollama list
 coliollama ps    [--host URL]
-coliollama stop  [--host URL]
+coliollama stop  [--host URL] [--server/-s]
 ```
 
 - `serve` runs the API server (`--detach` backgrounds it, logs in `logs/server.log`).
@@ -203,6 +203,8 @@ coliollama stop  [--host URL]
   pins the engine.
 - `--no-convert` skips the readiness check/conversion; `--keep-source` keeps the raw download after a conversion.
 - `list` prints name, size and path. `ps` prints active model, engine PID and queue depth.
+- `stop --server` shuts the server itself down (SIGTERM to the PID recorded in
+  `~/.coliollama/servers/<port>.pid`, which also stops its engine). Use `--host` for a non-default port.
 - `stop` force-terminates the engine (via the server, or by the recorded PID if
   the server is gone). In-flight requests fail.
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Annotated
 
 import typer
@@ -45,4 +46,10 @@ def serve(
 
     settings = Settings(host=host, port=port, max_concurrency=max_concurrency, gpu=gpu)
     settings.auto_update = settings.auto_update and auto_update
-    uvicorn.run(create_app(settings), host=host, port=port, log_level=log_level)
+    pid_file = settings.server_pid_path(port)
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+    pid_file.write_text(str(os.getpid()))
+    try:
+        uvicorn.run(create_app(settings), host=host, port=port, log_level=log_level)
+    finally:
+        pid_file.unlink(missing_ok=True)

@@ -216,3 +216,26 @@ def test_ollama_advertises_deepseek_tools_and_vision(client):
 
     shown = client.post("/api/show", json={"model": "alpha"}).json()
     assert shown["capabilities"] == capabilities
+
+
+def test_stop_server_shuts_down_detached_server(tmp_path):
+    import os
+    import subprocess
+    import sys
+    import time
+
+    import httpx
+
+    env = {**os.environ, "COLIOLLAMA_HOME": str(tmp_path), "COLIOLLAMA_AUTO_UPDATE": "0"}
+    run = lambda *a: subprocess.run([sys.executable, "-m", "coliollama", *a], env=env, capture_output=True, text=True, timeout=60)
+    assert run("serve", "--detach", "--port", "12388", "--no-auto-update").returncode == 0
+    assert httpx.get("http://127.0.0.1:12388/api/version").status_code == 200
+    out = run("stop", "--server", "--host", "http://127.0.0.1:12388")
+    assert "stopped" in out.stdout, out
+    time.sleep(0.5)
+    try:
+        httpx.get("http://127.0.0.1:12388/api/version", timeout=2)
+        raise AssertionError("server still up")
+    except httpx.HTTPError:
+        pass
+    assert "No ColiOllama server recorded" in run("stop", "--server", "--host", "http://127.0.0.1:12388").stdout

@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
+import signal
+import time
+from pathlib import Path
+from urllib.parse import urlparse
 from typing import Annotated
 
 import httpx
@@ -48,9 +53,55 @@ def ps(host: Annotated[str | None, typer.Option(help=SERVER_OPTION_HELP)] = None
         typer.echo("  ".join(c.ljust(w) for c, w in zip(row, widths)).rstrip())
 
 
-def stop(host: Annotated[str | None, typer.Option(help=SERVER_OPTION_HELP)] = None) -> None:
-    """Force-terminate the active Colibrí engine process."""
+def _is_our_server(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    try:
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes().decode(errors="replace")
+    except OSError:
+        return True  # no /proc (macOS): trust the pid file
+    return "coliollama" in cmdline
+
+
+def _stop_server(url: str) -> None:
+    port = urlparse(url).port or 11434
+    settings = Settings()
+    pid_file = settings.server_pid_path(port)
+    try:
+        pid = int(pid_file.read_text())
+    except (OSError, ValueError):
+        typer.echo(f"No ColiOllama server recorded for port {port} (was it started with `serve`?)")
+        raise typer.Exit(1)
+    if not _is_our_server(pid):
+        pid_file.unlink(missing_ok=True)
+        typer.echo(f"Server on port {port} is not running (stale pid file removed).")
+        return
+    os.kill(pid, signal.SIGTERM)  # graceful: the server stops its engine on the way out
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline and _is_our_server(pid):
+        time.sleep(0.2)
+    if _is_our_server(pid):
+        os.kill(pid, signal.SIGKILL)
+        kill_recorded_engine(settings)
+        typer.echo(f"Server {pid} did not exit in time and was killed.")
+    else:
+        typer.echo(f"Server {pid} on port {port} stopped.")
+    pid_file.unlink(missing_ok=True)
+
+
+def stop(
+    host: Annotated[str | None, typer.Option(help=SERVER_OPTION_HELP)] = None,
+    server: Annotated[
+        bool, typer.Option("--server", "-s", help="Stop the ColiOllama server itself (and its engine), not just the engine.")
+    ] = False,
+) -> None:
+    """Force-terminate the active Colibrí engine; with --server, shut the server down too."""
     url = server_url(host)
+    if server:
+        _stop_server(url)
+        return
     try:
         stopped = httpx.post(f"{url}/api/stop", timeout=60.0).json().get("stopped")
     except (httpx.HTTPError, json.JSONDecodeError):

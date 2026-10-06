@@ -136,6 +136,9 @@ class Settings:
     def state_path(self) -> Path:
         return self.home / "engine.json"
 
+    def server_pid_path(self, port: int) -> Path:
+        return self.home / "servers" / f"{port}.pid"
+
     @property
     def log_dir(self) -> Path:
         return self.home / "logs"
