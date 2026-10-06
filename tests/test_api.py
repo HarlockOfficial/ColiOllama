@@ -85,6 +85,50 @@ def test_openai_sdk(client):
     assert comp.choices[0].text == "alpha: p"
 
 
+def test_openai_responses_nonstream_and_stream(client):
+    sdk = OpenAI(base_url="http://testserver/v1", api_key="x", http_client=client)
+    response = sdk.responses.create(
+        model="alpha", instructions="Be concise", input="hello",
+    )
+    assert response.status == "completed"
+    assert response.output_text == "alpha: hello"
+    assert response.output[0].content[0].type == "output_text"
+
+    stream = sdk.responses.create(model="alpha", input="stream me", stream=True)
+    events = list(stream)
+    assert events[-1].type == "response.completed"
+    assert events[-1].response.output_text == "alpha: stream me "
+    assert any(event.type == "response.output_text.delta" for event in events)
+
+
+def test_openai_responses_input_validation(client):
+    r = client.post("/v1/responses", json={"model": "alpha", "input": [{"type": "unsupported"}]})
+    assert r.status_code == 400
+    assert r.json()["error"]["type"] == "invalid_request_error"
+    r = client.post("/v1/responses", json={"input": "hello"})
+    assert r.status_code == 400
+
+
+def test_openai_responses_maps_function_tools(client):
+    from coliollama.api.routes.openai_compat import _responses_request
+
+    request = _responses_request({
+        "model": "alpha",
+        "input": [
+            {"type": "function_call", "call_id": "call_1", "name": "lookup", "arguments": "{\"q\":\"x\"}"},
+            {"type": "function_call_output", "call_id": "call_1", "output": {"found": True}},
+        ],
+        "tools": [{"type": "function", "name": "lookup", "parameters": {"type": "object"}}],
+        "tool_choice": {"type": "function", "name": "lookup"},
+        "max_output_tokens": 20,
+    })
+    assert request["max_tokens"] == 20
+    assert request["tools"][0]["function"]["name"] == "lookup"
+    assert request["tool_choice"]["function"]["name"] == "lookup"
+    assert request["messages"][0]["tool_calls"][0]["id"] == "call_1"
+    assert request["messages"][1]["content"] == '{"found": true}'
+
+
 def test_curl_style_form_content_type_and_bad_json(client):
     r = client.post("/api/generate", content='{"model":"alpha","prompt":"hi","stream":false}',
                     headers={"Content-Type": "application/x-www-form-urlencoded"})

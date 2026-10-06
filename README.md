@@ -222,7 +222,11 @@ loaded; removes the files only if ColiOllama downloaded them and no alias uses t
 Answered with HTTP 501 because Colibrí cannot back them: `POST /api/create`, `/api/push`,
 `/api/embed`, `/api/embeddings`, `POST /api/blobs/:digest` (and `HEAD` always 404), `POST /v1/embeddings`.
 
-OpenAI compatible: `POST /v1/chat/completions`, `POST /v1/completions`, `GET /v1/models`, `GET /v1/models/{id}`.
+OpenAI-compatible: `POST /v1/chat/completions`, `POST /v1/completions`,
+`POST /v1/responses` (text/image input, instructions, tool round-trips, JSON formats,
+and streaming), `GET /v1/models`, and `GET /v1/models/{id}`. Responses requests are
+translated to Colibrí chat completions; features unsupported by the engine remain unavailable.
+`POST /v1/embeddings` returns HTTP 501 because Colibrí does not expose embedding vectors.
 
 ```bash
 curl http://localhost:11434/api/tags
