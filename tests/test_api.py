@@ -1,6 +1,7 @@
 import json
 import threading
 import time
+from pathlib import Path
 
 from openai import OpenAI
 
@@ -200,3 +201,18 @@ def test_ollama_metadata_shapes(client):
     assert model["capabilities"] and "context_length" in model["details"]
     shown = client.post("/api/show", json={"model": "alpha"}).json()
     assert {"license", "tensors", "details", "model_info", "capabilities"} <= set(shown)
+
+
+def test_ollama_advertises_deepseek_tools_and_vision(client):
+    entry = client.app.state.store.get("alpha")
+    (Path(entry.path) / "config.json").write_text(json.dumps({
+        "model_type": "deepseek_v41",
+        "text_config": {"model_type": "deepseek_v41_text"},
+    }))
+
+    tags = client.get("/api/tags").json()["models"]
+    capabilities = next(model["capabilities"] for model in tags if model["name"] == "alpha")
+    assert capabilities == ["completion", "tools", "vision"]
+
+    shown = client.post("/api/show", json={"model": "alpha"}).json()
+    assert shown["capabilities"] == capabilities

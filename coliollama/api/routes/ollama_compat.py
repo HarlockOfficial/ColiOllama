@@ -39,6 +39,13 @@ _OPTION_MAP = {
     "frequency_penalty": "frequency_penalty",
 }
 
+_TOOL_MODEL_TYPES = {
+    "glm5_next", "glm5_next_text", "glm_moe_dsa", "glm5_moe", "glm",
+    "kimi_k3", "kimi_linear", "qwen4_exp", "qwen4_exp_text",
+    "deepseek_v4", "deepseek_v41", "deepseek_v41_text",
+}
+_VISION_MODEL_TYPES = {"glm5_next", "qwen4_exp", "deepseek_v41"}
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -66,6 +73,20 @@ def _int(config: dict, *keys: str) -> int | None:
 
 def context_length(entry: ModelEntry) -> int:
     return _int(read_config(entry), "max_position_embeddings") or 8192
+
+
+def model_capabilities(entry: ModelEntry) -> list[str]:
+    config = read_config(entry)
+    text_config = config.get("text_config")
+    model_types = {config.get("model_type")}
+    if isinstance(text_config, dict):
+        model_types.add(text_config.get("model_type"))
+    capabilities = ["completion"]
+    if model_types & _TOOL_MODEL_TYPES:
+        capabilities.append("tools")
+    if model_types & _VISION_MODEL_TYPES:
+        capabilities.append("vision")
+    return capabilities
 
 
 def _details(entry: ModelEntry) -> dict:
@@ -108,7 +129,7 @@ async def tags(store: LocalStore = Depends(get_store)):
                 "size": m.size_bytes() if m.exists else 0,
                 "digest": _digest(m),
                 "details": _details(m),
-                "capabilities": ["completion"],
+                "capabilities": model_capabilities(m),
             }
         )
     return {"models": models}

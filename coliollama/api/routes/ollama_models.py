@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from coliollama import __version__
-from coliollama.api.routes.ollama_compat import _details, read_config
+from coliollama.api.routes.ollama_compat import _details, model_capabilities, read_config
 from coliollama.api.fastapi.dependencies import ApiError, get_scheduler, get_store, json_body, lookup_model
 from coliollama.core.scheduler.queue_manager import QueueManager
 from coliollama.registry.huggingface_resolver import HuggingFaceResolver, ModelResolutionError
@@ -65,7 +65,7 @@ async def show(body: dict = Depends(json_body), store: LocalStore = Depends(get_
         "tensors": [],
         "details": _details(entry),
         "model_info": info,
-        "capabilities": ["completion"],
+        "capabilities": model_capabilities(entry),
         "modified_at": datetime.fromtimestamp(entry.added_at or 0, timezone.utc).isoformat(),
     }
 
